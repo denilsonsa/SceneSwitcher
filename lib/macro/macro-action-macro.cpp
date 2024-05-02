@@ -48,9 +48,7 @@ bool MacroActionMacro::PerformAction()
 		macro->ResetRunCount();
 		break;
 	case Action::RUN:
-		if (!macro->Paused()) {
-			macro->PerformActions(true, false, true);
-		}
+		RunActions(macro.get());
 		break;
 	case Action::STOP:
 		macro->Stop();
@@ -127,6 +125,7 @@ bool MacroActionMacro::Save(obs_data_t *obj) const
 	_macro.Save(obj);
 	_actionIndex.Save(obj, "actionIndex");
 	obs_data_set_int(obj, "action", static_cast<int>(_action));
+	_runOptions.Save(obj);
 	return true;
 }
 
@@ -137,6 +136,7 @@ bool MacroActionMacro::Load(obs_data_t *obj)
 	_actionIndex.Load(obj, "actionIndex");
 	_action = static_cast<MacroActionMacro::Action>(
 		obs_data_get_int(obj, "action"));
+	_runOptions.Load(obj);
 	return true;
 }
 
@@ -158,6 +158,23 @@ std::shared_ptr<MacroAction> MacroActionMacro::Copy() const
 void MacroActionMacro::ResolveVariablesToFixedValues()
 {
 	_actionIndex.ResolveVariables();
+}
+
+void MacroActionMacro::RunActions(Macro *macro) const
+{
+	if (_runOptions.runWhenPaused && macro->Paused()) {
+		return;
+	}
+	if (_runOptions.logic == RunOptions::Logic::IGNORE_CONDITIONS) {
+		macro->PerformActions(!_runOptions.runElseActions, false, true);
+		return;
+	}
+	if (_runOptions.logic == RunOptions::Logic::CONDITIONS &&
+		    macro->Matched() ||
+	    _runOptions.logic == RunOptions::Logic::INVERT_CONDITIONS &&
+		    !macro->Matched()) {
+		macro->PerformActions(!_runOptions.runElseActions, false, true);
+	}
 }
 
 static inline void populateActionSelection(QComboBox *list)
@@ -260,6 +277,23 @@ void MacroActionMacroEdit::SetWidgetVisibility()
 			MacroActionMacro::Action::ENABLE_ACTION ||
 		_entryData->_action == MacroActionMacro::Action::TOGGLE_ACTION;
 	_actionIndex->setVisible(isModifyingActionState);
+}
+
+void MacroActionMacro::RunOptions::Save(obs_data_t *obj) const
+{
+	OBSDataAutoRelease data = obs_data_create();
+	obs_data_set_int(data, "logic", static_cast<int>(logic));
+	obs_data_set_bool(data, "runElseActions", runElseActions);
+	obs_data_set_bool(data, "runWhenPaused", runWhenPaused);
+	obs_data_set_obj(obj, "runOptions", data);
+}
+
+void MacroActionMacro::RunOptions::Load(obs_data_t *obj)
+{
+	OBSDataAutoRelease data = obs_data_get_obj(obj, "runOptions");
+	logic = static_cast<Logic>(obs_data_get_int(data, "invertLogic"));
+	runElseActions = obs_data_get_bool(data, "runElseActions");
+	runWhenPaused = obs_data_get_bool(data, "runWhenPaused");
 }
 
 } // namespace advss

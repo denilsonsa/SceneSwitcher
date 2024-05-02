@@ -20,6 +20,19 @@ public:
 	std::shared_ptr<MacroAction> Copy() const;
 	void ResolveVariablesToFixedValues();
 
+	struct RunOptions {
+		void Save(obs_data_t *obj) const;
+		void Load(obs_data_t *obj);
+		enum class Logic {
+			IGNORE_CONDITIONS,
+			CONDITIONS,
+			INVERT_CONDITIONS,
+		};
+		Logic logic;
+		bool runElseActions = false;
+		bool runWhenPaused = false;
+	};
+
 	enum class Action {
 		PAUSE,
 		UNPAUSE,
@@ -32,8 +45,11 @@ public:
 	};
 	Action _action = Action::PAUSE;
 	IntVariable _actionIndex = 1;
+	RunOptions _runOptions = {};
 
 private:
+	void RunActions(Macro *) const;
+
 	static bool _registered;
 	static const std::string id;
 };
